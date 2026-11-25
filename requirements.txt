@@ -1,0 +1,7 @@
+duckdb>=1.1
+pandas>=2.2
+openpyxl>=3.1
+pyyaml>=6.0
+streamlit>=1.40
+plotly>=5.22
+pytest>=8

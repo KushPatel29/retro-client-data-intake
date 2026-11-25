@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retro-intake"
+version = "1.0.0"
+description = "Client data intake, validation and reconciliation for life retrocession files (synthetic data)"
+requires-python = ">=3.11"
+dependencies = ["duckdb>=1.1", "pandas>=2.2", "openpyxl>=3.1", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "streamlit>=1.40", "plotly>=5.22"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

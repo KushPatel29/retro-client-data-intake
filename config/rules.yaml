@@ -1,0 +1,315 @@
+# Data quality rule catalogue.
+# Each rule is one SQL query over the staged tables that returns the rows that FAIL the rule:
+#   file_id, row_num, record_key, detail
+# CRITICAL rows are held back from production and sent to the client for correction.
+# WARNING rows load, but are listed for review.
+# `requires`: standard fields the rule needs; the rule is skipped for a file that arrived without them.
+# Rules run in order, so a rule can use exceptions found by earlier rules (see BL005).
+
+rules:
+  # ---------------------------------------------------------------- inforce
+  - id: IF001
+    name: Required field missing
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Completeness
+    requires: [insured_dob, issue_date, face_amount]
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'Missing ' || concat_ws(', ',
+                CASE WHEN policy_id IS NULL THEN 'policy number' END,
+                CASE WHEN life_id IS NULL THEN 'life id' END,
+                CASE WHEN coalesce(insured_dob_raw, '') = '' THEN 'date of birth' END,
+                CASE WHEN coalesce(issue_date_raw, '') = '' THEN 'issue date' END,
+                CASE WHEN face_amount IS NULL THEN 'face amount' END) AS detail
+      FROM stg_inforce
+      WHERE policy_id IS NULL OR life_id IS NULL OR coalesce(insured_dob_raw, '') = ''
+         OR coalesce(issue_date_raw, '') = '' OR face_amount IS NULL
+
+  - id: IF002
+    name: Duplicate policy and life in file
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Uniqueness
+    sql: |
+      SELECT file_id, row_num, record_key, 'Appears ' || CAST(n AS VARCHAR) || ' times in this file' AS detail
+      FROM (SELECT *, count(*) OVER (PARTITION BY file_id, policy_id, life_id) AS n FROM stg_inforce)
+      WHERE n > 1 AND policy_id IS NOT NULL
+
+  - id: IF003
+    name: Date cannot be read
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Validity
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'Unreadable date: ' || concat_ws(', ',
+                CASE WHEN insured_dob IS NULL AND coalesce(insured_dob_raw, '') <> '' THEN 'DOB "' || insured_dob_raw || '"' END,
+                CASE WHEN issue_date IS NULL AND coalesce(issue_date_raw, '') <> '' THEN 'issue date "' || issue_date_raw || '"' END) AS detail
+      FROM stg_inforce
+      WHERE (insured_dob IS NULL AND coalesce(insured_dob_raw, '') <> '')
+         OR (issue_date IS NULL AND coalesce(issue_date_raw, '') <> '')
+
+  - id: IF004
+    name: Date of birth after issue date
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Consistency
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'DOB ' || CAST(insured_dob AS VARCHAR) || ' is after issue date ' || CAST(issue_date AS VARCHAR) AS detail
+      FROM stg_inforce
+      WHERE insured_dob > issue_date OR insured_dob > period_end
+
+  - id: IF005
+    name: Issue age does not match DOB
+    file_type: inforce
+    severity: WARNING
+    dimension: Consistency
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'Issue age ' || CAST(issue_age AS VARCHAR) || ' but DOB gives ' || CAST(alb(insured_dob, issue_date) AS VARCHAR) AS detail
+      FROM stg_inforce
+      WHERE insured_dob < issue_date AND issue_age IS NOT NULL
+        AND abs(issue_age - alb(insured_dob, issue_date)) > 1
+
+  - id: IF006
+    name: Face amount zero or negative
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Validity
+    sql: |
+      SELECT file_id, row_num, record_key, 'Face amount ' || CAST(face_amount AS VARCHAR) AS detail
+      FROM stg_inforce WHERE face_amount <= 0
+
+  - id: IF007
+    name: Face amount above jumbo limit
+    file_type: inforce
+    severity: WARNING
+    dimension: Validity
+    sql: |
+      SELECT i.file_id, i.row_num, i.record_key,
+             'Face ' || format('{:,.0f}', i.face_amount) || ' is above the ' || format('{:,.0f}', r.jumbo_limit) || ' jumbo limit' AS detail
+      FROM stg_inforce i JOIN ref_cedant r USING (cedant_id)
+      WHERE i.face_amount > r.jumbo_limit
+
+  - id: IF008
+    name: Retro share outside 0-100%
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Validity
+    sql: |
+      SELECT file_id, row_num, record_key, 'Retro share ' || coalesce(CAST(retro_share AS VARCHAR), 'blank') AS detail
+      FROM stg_inforce WHERE retro_share IS NULL OR retro_share <= 0 OR retro_share > 1
+
+  - id: IF009
+    name: Code not recognised
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Validity
+    requires: [sex, smoker, status]
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'Unknown code: ' || concat_ws(', ',
+                CASE WHEN sex IS NULL THEN 'sex "' || coalesce(sex_raw, '') || '"' END,
+                CASE WHEN smoker IS NULL THEN 'smoker "' || coalesce(smoker_raw, '') || '"' END,
+                CASE WHEN status IS NULL THEN 'status "' || coalesce(status_raw, '') || '"' END) AS detail
+      FROM stg_inforce WHERE sex IS NULL OR smoker IS NULL OR status IS NULL
+
+  - id: IF010
+    name: Issue age outside treaty limits
+    file_type: inforce
+    severity: WARNING
+    dimension: Validity
+    sql: |
+      SELECT i.file_id, i.row_num, i.record_key,
+             'Issue age ' || CAST(i.issue_age AS VARCHAR) || ', treaty allows ' || CAST(r.min_issue_age AS VARCHAR) || '-' || CAST(r.max_issue_age AS VARCHAR) AS detail
+      FROM stg_inforce i JOIN ref_cedant r USING (cedant_id)
+      WHERE i.issue_age < r.min_issue_age OR i.issue_age > r.max_issue_age
+
+  - id: IF011
+    name: Currency does not match treaty
+    file_type: inforce
+    severity: CRITICAL
+    dimension: Validity
+    sql: |
+      SELECT i.file_id, i.row_num, i.record_key,
+             'Currency ' || coalesce(i.currency, 'blank') || ', treaty is ' || r.currency AS detail
+      FROM stg_inforce i JOIN ref_cedant r USING (cedant_id)
+      WHERE coalesce(i.currency, '') <> r.currency
+
+  # ---------------------------------------------------------------- billing
+  - id: BL001
+    name: Billed policy not in inforce
+    file_type: billing
+    severity: CRITICAL
+    dimension: Reconciliation
+    sql: |
+      SELECT b.file_id, b.row_num, b.record_key, 'No matching policy in the ' || b.period || ' inforce file' AS detail
+      FROM stg_billing b
+      WHERE EXISTS (SELECT 1 FROM stg_inforce i WHERE i.cedant_id = b.cedant_id AND i.period = b.period)
+        AND NOT EXISTS (SELECT 1 FROM stg_inforce i WHERE i.cedant_id = b.cedant_id AND i.period = b.period
+                        AND i.policy_id = b.policy_id AND i.life_id = b.life_id)
+
+  - id: BL002
+    name: Negative premium not marked as reversal
+    file_type: billing
+    severity: CRITICAL
+    dimension: Validity
+    sql: |
+      SELECT file_id, row_num, record_key,
+             'Premium ' || CAST(premium AS VARCHAR) || ' with transaction ' || coalesce(transaction_type, transaction_type_raw) AS detail
+      FROM stg_billing WHERE premium < 0 AND coalesce(transaction_type, '') <> 'REVERSAL'
+
+  - id: BL003
+    name: Premium billed on terminated policy
+    file_type: billing
+    severity: WARNING
+    dimension: Reconciliation
+    sql: |
+      SELECT b.file_id, b.row_num, b.record_key, 'Policy status is ' || i.status AS detail
+      FROM stg_billing b
+      JOIN (SELECT DISTINCT cedant_id, period, policy_id, life_id, status FROM stg_inforce) i
+        ON i.cedant_id = b.cedant_id AND i.period = b.period AND i.policy_id = b.policy_id AND i.life_id = b.life_id
+      WHERE coalesce(b.transaction_type, '') <> 'REVERSAL' AND i.status IN ('LAPSED', 'DEATH', 'CI_PAID')
+
+  - id: BL004
+    name: Duplicate billing line
+    file_type: billing
+    severity: CRITICAL
+    dimension: Uniqueness
+    sql: |
+      SELECT file_id, row_num, record_key, 'Same line appears ' || CAST(n AS VARCHAR) || ' times' AS detail
+      FROM (SELECT *, count(*) OVER (PARTITION BY file_id, policy_id, life_id, transaction_type, premium) AS n
+            FROM stg_billing)
+      WHERE n > 1
+
+  - id: BL005
+    name: Premium differs from treaty rate by more than 25%
+    file_type: billing
+    severity: WARNING
+    dimension: Reconciliation
+    sql: |
+      WITH clean AS (
+        SELECT i.* FROM stg_inforce i
+        WHERE i.sex IS NOT NULL AND i.smoker IS NOT NULL AND i.insured_dob IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM exceptions e WHERE e.file_id = i.file_id AND e.row_num = i.row_num
+                          AND e.severity = 'CRITICAL')),
+      expected AS (
+        SELECT c.cedant_id, c.period, c.policy_id, c.life_id,
+               round(c.face_amount * c.retro_share / 1000 * r.rate_base
+                     * exp(r.rate_slope * (alb(c.insured_dob, c.period_end) - 30))
+                     * CASE WHEN c.smoker = 'S' THEN r.rate_smoker ELSE 1 END
+                     * CASE WHEN c.sex = 'F' THEN r.rate_female ELSE 1 END / 12, 2) AS expected
+        FROM clean c JOIN ref_cedant r USING (cedant_id))
+      SELECT b.file_id, b.row_num, b.record_key,
+             'Billed ' || format('{:,.2f}', b.premium) || ', treaty rate gives ' || format('{:,.2f}', x.expected) AS detail
+      FROM stg_billing b
+      JOIN expected x ON x.cedant_id = b.cedant_id AND x.period = b.period
+                     AND x.policy_id = b.policy_id AND x.life_id = b.life_id
+      WHERE b.premium > 0 AND coalesce(b.transaction_type, '') <> 'REVERSAL' AND x.expected > 0
+        AND abs(b.premium - x.expected) / x.expected > 0.25
+
+  # ---------------------------------------------------------------- claims
+  - id: CL001
+    name: Claim on policy never reported inforce
+    file_type: claims
+    severity: CRITICAL
+    dimension: Reconciliation
+    sql: |
+      SELECT c.file_id, c.row_num, c.record_key, 'Policy ' || c.policy_id || ' not found in any inforce file' AS detail
+      FROM stg_claims c
+      WHERE NOT EXISTS (SELECT 1 FROM stg_inforce i WHERE i.cedant_id = c.cedant_id AND i.period <= c.period
+                        AND i.policy_id = c.policy_id AND i.life_id = c.life_id)
+
+  - id: CL002
+    name: Event date before policy issue date
+    file_type: claims
+    severity: CRITICAL
+    dimension: Consistency
+    sql: |
+      SELECT DISTINCT c.file_id, c.row_num, c.record_key,
+             'Event ' || CAST(c.date_of_event AS VARCHAR) || ', policy issued ' || CAST(i.issue_date AS VARCHAR) AS detail
+      FROM stg_claims c
+      JOIN stg_inforce i ON i.cedant_id = c.cedant_id AND i.period <= c.period
+                        AND i.policy_id = c.policy_id AND i.life_id = c.life_id
+      WHERE c.date_of_event < i.issue_date
+
+  - id: CL003
+    name: Claim larger than amount ceded
+    file_type: claims
+    severity: CRITICAL
+    dimension: Reconciliation
+    sql: |
+      SELECT DISTINCT c.file_id, c.row_num, c.record_key,
+             'Claim ' || format('{:,.2f}', c.claim_amount) || ', ceded amount ' || format('{:,.2f}', i.face_amount * i.retro_share) AS detail
+      FROM stg_claims c
+      JOIN stg_inforce i ON i.cedant_id = c.cedant_id AND i.period = c.period
+                        AND i.policy_id = c.policy_id AND i.life_id = c.life_id
+      WHERE i.face_amount > 0 AND i.retro_share BETWEEN 0 AND 1
+        AND c.claim_amount > i.face_amount * i.retro_share * 1.01
+
+  - id: CL004
+    name: Claim on policy still reported active
+    file_type: claims
+    severity: WARNING
+    dimension: Consistency
+    sql: |
+      SELECT DISTINCT c.file_id, c.row_num, c.record_key, 'Inforce status for ' || c.period || ' is still ACTIVE' AS detail
+      FROM stg_claims c
+      JOIN stg_inforce i ON i.cedant_id = c.cedant_id AND i.period = c.period
+                        AND i.policy_id = c.policy_id AND i.life_id = c.life_id
+      WHERE i.status = 'ACTIVE'
+
+  # ---------------------------------------------------------------- month-over-month roll-forward
+  - id: RF001
+    name: Active last month, missing this month
+    file_type: inforce
+    severity: WARNING
+    dimension: Roll-forward
+    sql: |
+      WITH files AS (SELECT DISTINCT file_id, cedant_id, period, period_start FROM stg_inforce),
+      pairs AS (SELECT c.file_id AS cur_file, p.file_id AS prev_file, p.period AS prev_period
+                FROM files c JOIN files p ON p.cedant_id = c.cedant_id
+                 AND p.period = strftime(c.period_start - INTERVAL 1 DAY, '%Y-%m'))
+      SELECT DISTINCT pr.cur_file AS file_id, CAST(NULL AS INTEGER) AS row_num, x.record_key,
+             'ACTIVE in ' || pr.prev_period || ', not in this file and no termination reported' AS detail
+      FROM pairs pr
+      JOIN stg_inforce x ON x.file_id = pr.prev_file AND x.status = 'ACTIVE'
+      WHERE NOT EXISTS (SELECT 1 FROM stg_inforce c WHERE c.file_id = pr.cur_file
+                        AND c.policy_id = x.policy_id AND c.life_id = x.life_id)
+
+  - id: RF002
+    name: Face amount changed by more than 50%
+    file_type: inforce
+    severity: WARNING
+    dimension: Roll-forward
+    sql: |
+      WITH files AS (SELECT DISTINCT file_id, cedant_id, period, period_start FROM stg_inforce),
+      pairs AS (SELECT c.file_id AS cur_file, p.file_id AS prev_file
+                FROM files c JOIN files p ON p.cedant_id = c.cedant_id
+                 AND p.period = strftime(c.period_start - INTERVAL 1 DAY, '%Y-%m'))
+      SELECT DISTINCT c.file_id, c.row_num, c.record_key,
+             'Face ' || format('{:,.0f}', x.face_amount) || ' last month, ' || format('{:,.0f}', c.face_amount) || ' now' AS detail
+      FROM pairs pr
+      JOIN stg_inforce c ON c.file_id = pr.cur_file
+      JOIN stg_inforce x ON x.file_id = pr.prev_file AND x.policy_id = c.policy_id AND x.life_id = c.life_id
+      WHERE c.face_amount > 0 AND x.face_amount > 0 AND abs(c.face_amount / x.face_amount - 1) > 0.5
+
+  - id: RF003
+    name: New this month but issued before this month
+    file_type: inforce
+    severity: WARNING
+    dimension: Roll-forward
+    sql: |
+      WITH files AS (SELECT DISTINCT file_id, cedant_id, period, period_start FROM stg_inforce),
+      pairs AS (SELECT c.file_id AS cur_file, p.file_id AS prev_file
+                FROM files c JOIN files p ON p.cedant_id = c.cedant_id
+                 AND p.period = strftime(c.period_start - INTERVAL 1 DAY, '%Y-%m'))
+      SELECT c.file_id, c.row_num, c.record_key,
+             'Not in last month''s file, issued ' || CAST(c.issue_date AS VARCHAR) || ' (late-reported business?)' AS detail
+      FROM pairs pr
+      JOIN stg_inforce c ON c.file_id = pr.cur_file
+      WHERE c.issue_date < c.period_start
+        AND NOT EXISTS (SELECT 1 FROM stg_inforce x WHERE x.file_id = pr.prev_file
+                        AND x.policy_id = c.policy_id AND x.life_id = c.life_id)

@@ -1,0 +1,133 @@
+# Client (ceding company) configuration.
+# All clients, treaties and people in this project are FICTIONAL. All data is synthetic.
+#
+# Each client sends three monthly files (inforce, billing, claims), each in its own layout.
+# The mapping section turns every client's layout into one standard format.
+
+due_day: 10            # files for period YYYY-MM are due by this day of the following month
+critical_rate_hold: 0.02   # a file is held if more than 2% of its rows fail a critical rule...
+hold_min_rows: 100         # ...and it has at least this many rows (small files: failing rows are held one by one)
+amount_tolerance: 0.01     # control-total tolerance, in currency units
+
+clients:
+  C01:
+    name: Northbridge Life Re
+    country: Canada
+    treaty_id: NBL-YRT-2019
+    rate_basis: {base: 0.55, slope: 0.085, smoker: 2.0, female: 0.85}  # annual rate per 1,000 ceded
+    currency: CAD
+    min_issue_age: 18
+    max_issue_age: 85
+    jumbo_limit: 25000000
+    format: csv
+    delimiter: ","
+    date_format: "%Y-%m-%d"
+    control: trailer          # last line: TRL,<record_count>,<total_amount>
+    filename: "NBL_{file_type}_{yyyymm}.csv"
+    codes:
+      sex: {M: M, F: F}
+      smoker: {S: S, N: N}
+      status: {ACTIVE: ACTIVE, LAPSED: LAPSED, DEATH: DEATH, CIPAID: CI_PAID}
+      transaction_type: {FY: FIRST_YEAR, RN: RENEWAL, RV: REVERSAL}
+      claim_type: {DTH: DEATH, CI: CRITICAL_ILLNESS}
+    columns:
+      inforce: {policy_id: POLICY_NO, life_id: LIFE_NO, insured_dob: DOB, sex: SEX, smoker: SMOKER,
+                issue_date: ISSUE_DT, issue_age: ISSUE_AGE, face_amount: FACE_AMT, retro_share: RETRO_PCT,
+                status: STATUS, currency: CCY, product: PLAN}
+      billing: {policy_id: POLICY_NO, life_id: LIFE_NO, premium: PREM_AMT, transaction_type: TRAN_TYPE, currency: CCY}
+      claims:  {claim_id: CLAIM_NO, policy_id: POLICY_NO, life_id: LIFE_NO, date_of_event: EVENT_DT,
+                claim_type: CLAIM_TYPE, claim_amount: CLAIM_AMT, currency: CCY}
+    multipliers: {face_amount: 1, retro_share: 0.01}
+    retro_share_default: 0.50
+
+  C02:
+    name: Harbourline Reinsurance Co.
+    country: United States
+    treaty_id: HRL-CQS-2021
+    rate_basis: {base: 0.6, slope: 0.085, smoker: 2.0, female: 0.85}  # annual rate per 1,000 ceded
+    currency: USD
+    min_issue_age: 18
+    max_issue_age: 80
+    jumbo_limit: 30000000
+    format: pipe
+    delimiter: "|"
+    date_format: "%m/%d/%Y"
+    control: sidecar          # separate file HRL_<file_type>_<yyyymm>.ctl as JSON
+    filename: "HRL_{file_type}_{yyyymm}.txt"
+    codes:
+      sex: {"1": M, "2": F}
+      smoker: {"1": S, "0": N}
+      status: {IF: ACTIVE, LA: LAPSED, DC: DEATH, CI: CI_PAID}
+      transaction_type: {NB: FIRST_YEAR, REN: RENEWAL, REV: REVERSAL}
+      claim_type: {D: DEATH, C: CRITICAL_ILLNESS}
+    columns:
+      inforce: {policy_id: PolicyNumber, life_id: InsuredSeq, insured_dob: BirthDate, sex: GenderCd, smoker: TobaccoCd,
+                issue_date: EffectiveDate, issue_age: AgeAtIssue, face_amount: FaceAmtThousands, retro_share: CededPct,
+                status: PolStatus, currency: Currency, product: ProductCode}
+      billing: {policy_id: PolicyNumber, life_id: InsuredSeq, premium: CededPremium, transaction_type: TxnCode, currency: Currency}
+      claims:  {claim_id: ClaimRef, policy_id: PolicyNumber, life_id: InsuredSeq, date_of_event: DateOfLoss,
+                claim_type: ClaimCat, claim_amount: ClaimPayable, currency: Currency}
+    multipliers: {face_amount: 1000, retro_share: 1}
+    retro_share_default: 0.40
+
+  C03:
+    name: Kestrel Re Asia Pte.
+    country: Singapore
+    treaty_id: KRA-YRT-2020
+    rate_basis: {base: 0.5, slope: 0.085, smoker: 2.0, female: 0.85}  # annual rate per 1,000 ceded
+    currency: USD
+    min_issue_age: 18
+    max_issue_age: 75
+    jumbo_limit: 20000000
+    format: xlsx
+    date_format: "%d/%m/%Y"
+    control: sheet            # second sheet named CONTROL with record_count and total_amount
+    filename: "Kestrel_{file_type}_{yyyymm}.xlsx"
+    codes:
+      sex: {MALE: M, FEMALE: F}
+      smoker: {SM: S, NS: N}
+      status: {INFORCE: ACTIVE, LAPSE: LAPSED, DECEASED: DEATH, CI CLAIMED: CI_PAID}
+      transaction_type: {First Year: FIRST_YEAR, Renewal: RENEWAL, Reversal: REVERSAL}
+      claim_type: {Death: DEATH, Critical Illness: CRITICAL_ILLNESS}
+    columns:
+      inforce: {policy_id: Policy Ref, life_id: Life, insured_dob: Date of Birth, sex: Gender, smoker: Smoker Status,
+                issue_date: Commencement Date, issue_age: Entry Age, face_amount: Sum Assured, retro_share: Retro Share,
+                status: Policy Status, currency: Currency, product: Benefit}
+      billing: {policy_id: Policy Ref, life_id: Life, premium: Retro Premium, transaction_type: Movement, currency: Currency}
+      claims:  {claim_id: Claim Ref, policy_id: Policy Ref, life_id: Life, date_of_event: Event Date,
+                claim_type: Claim Type, claim_amount: Claim Amount, currency: Currency}
+    multipliers: {face_amount: 1, retro_share: 1}
+    retro_share_default: 0.30
+
+  C04:
+    name: Atlantic Mutual Re plc
+    country: United Kingdom
+    treaty_id: AMR-QS-2018
+    rate_basis: {base: 0.65, slope: 0.085, smoker: 2.0, female: 0.85}  # annual rate per 1,000 ceded
+    currency: GBP
+    min_issue_age: 18
+    max_issue_age: 85
+    jumbo_limit: 15000000
+    format: fixed
+    date_format: "%Y%m%d"
+    control: trailer          # last line: TRL<record_count 9><total_amount 18, 2 implied decimals>
+    filename: "AMR_{file_type}_{yyyymm}.dat"
+    codes:
+      sex: {M: M, F: F}
+      smoker: {Y: S, N: N}
+      status: {A: ACTIVE, L: LAPSED, D: DEATH, C: CI_PAID}
+      transaction_type: {FYP: FIRST_YEAR, REN: RENEWAL, REV: REVERSAL}
+      claim_type: {DEATH: DEATH, CI: CRITICAL_ILLNESS}
+    widths:
+      inforce: [[POLNO, 12], [LIFE, 2], [DOB, 8], [SEX, 1], [SMK, 1], [ISSDT, 8], [AGE, 3], [SUMASS, 12],
+                [SHARE, 5], [STAT, 1], [CCY, 3], [PROD, 4]]
+      billing: [[POLNO, 12], [LIFE, 2], [PREM, 12], [TXN, 3], [CCY, 3]]
+      claims:  [[CLMNO, 10], [POLNO, 12], [LIFE, 2], [EVTDT, 8], [CTYPE, 5], [CLMAMT, 12], [CCY, 3]]
+    columns:
+      inforce: {policy_id: POLNO, life_id: LIFE, insured_dob: DOB, sex: SEX, smoker: SMK, issue_date: ISSDT,
+                issue_age: AGE, face_amount: SUMASS, retro_share: SHARE, status: STAT, currency: CCY, product: PROD}
+      billing: {policy_id: POLNO, life_id: LIFE, premium: PREM, transaction_type: TXN, currency: CCY}
+      claims:  {claim_id: CLMNO, policy_id: POLNO, life_id: LIFE, date_of_event: EVTDT, claim_type: CTYPE,
+                claim_amount: CLMAMT, currency: CCY}
+    multipliers: {face_amount: 1, retro_share: 0.001, premium: 0.01, claim_amount: 0.01}
+    retro_share_default: 0.25

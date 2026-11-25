@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retro Intake Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;700&family=Red+Hat+Text:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: an operations control sheet a data integration analyst runs every month
+   IDEA the intake team's file ledger: every client file for every month, stamped GO, HOLD or MISSING
+   PICTURE a board of file tiles, clients down, months and file types across, coloured by decision
+   COLOUR oxford blue band, white panels, magenta for held or missing, slate neutrals
+   TYPE Red Hat Display 700 + Red Hat Text
+   LAYOUT title band with the finding and five figures, the board full width under it, then route, scores, rules, explorer, follow-up */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#070f26);--ink:light-dark(#0b1f4b,#e8ecf6);--soft:light-dark(#5a6680,#a3adc4);--line:light-dark(#dfe3ec,#1f2b4d);--panel:light-dark(#f4f6fa,#0d1838);--navy:#0b1f4b;--go:light-dark(#0b1f4b,#5b7fd6);--go2:light-dark(#8fa3cf,#2f4a8a);--mag:#e0115f;--magsoft:light-dark(#fde3ec,#3a1027);--late:light-dark(#b45309,#f0a35a)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 "Red Hat Text",system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Red Hat Display",system-ui,sans-serif;letter-spacing:-.02em;line-height:1.1;margin:0}
+h1{font-size:clamp(30px,4.6vw,48px);text-wrap:balance;max-width:20ch}
+h2{font-size:clamp(22px,2.6vw,28px);margin-bottom:6px;text-wrap:balance}
+p{margin:0}
+.band{padding:clamp(26px,4vw,56px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.top{background:var(--navy);color:#fff}
+.top .lede{color:#c9d3ea;margin-top:12px;max-width:62ch}
+.note{font-size:13px;color:#9fb0d6;margin-top:10px}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:12px;margin-top:26px}
+.fg{border-top:2px solid #3b5490;padding-top:10px}
+.fg b{display:block;font:700 clamp(28px,3.4vw,40px)/1 "Red Hat Display",sans-serif;white-space:nowrap}
+.fg span{font-size:14px;color:#c9d3ea}
+.fg.hot b{color:#ff6b9c}
+.sub{color:var(--soft);max-width:70ch;margin-bottom:18px}
+.board{display:grid;grid-template-columns:minmax(9em,13em) repeat(3,minmax(0,1fr));gap:10px 14px;align-items:stretch}
+.bh{font:700 15px "Red Hat Display",sans-serif;padding-bottom:4px;border-bottom:2px solid var(--ink)}
+.bh small{display:block;font:400 13px "Red Hat Text",sans-serif;color:var(--soft)}
+.cl{display:flex;flex-direction:column;justify-content:center;font-weight:700;line-height:1.25}
+.cl small{font-weight:400;color:var(--soft);font-size:13px}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.tile{position:relative;border:0;border-radius:6px;min-height:74px;padding:8px 8px 6px;text-align:left;font:500 13px/1.25 "Red Hat Text",sans-serif;cursor:pointer;color:#fff;background:var(--go);display:flex;flex-direction:column;justify-content:space-between}
+.tile:focus-visible{outline:3px solid var(--mag);outline-offset:2px}
+.tile.sel{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--ink)}
+.tile .ft{font-weight:700}
+.tile .n{font-size:12px;opacity:.9;white-space:nowrap}
+.tile.part{background:var(--go2);color:var(--ink)}
+.tile.part::after{content:"";position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--mag)}
+.tile.hold{background:var(--mag)}
+.tile.miss{background:repeating-linear-gradient(135deg,var(--magsoft) 0 6px,transparent 6px 12px);color:var(--mag);border:2px dashed var(--mag)}
+.tile.late{border-top:6px solid var(--late);padding-top:4px}
+.tile .lt{color:inherit;font-weight:700}
+.ml{display:none;font-size:13px;color:var(--soft);margin-bottom:3px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:14px;color:var(--soft)}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+.detail{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.detail h3{font-size:19px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(7.5em,1fr));gap:8px 18px;margin:12px 0}
+.kv div{font-size:14px;color:var(--soft)}
+.kv b{display:block;color:var(--ink);font-size:16px;white-space:nowrap}
+.route{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;margin-top:6px;counter-reset:s}
+.st{position:relative;padding:14px 12px 12px 0;border-top:6px solid var(--go)}
+.st::before{content:"";position:absolute;top:-12px;left:0;width:18px;height:18px;border-radius:50%;background:var(--bg);border:4px solid var(--go)}
+.st.hot{border-top-color:var(--mag)}
+.st.hot::before{border-color:var(--mag)}
+.st h3{font-size:17px;margin-top:6px}
+.st b{display:block;font:700 26px/1.1 "Red Hat Display",sans-serif;margin-top:6px;white-space:nowrap}
+.st p{font-size:14px;color:var(--soft)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px)}
+.rows{display:grid;gap:7px}
+.row{display:grid;grid-template-columns:minmax(0,17em) minmax(0,1fr) 3em;gap:10px;align-items:center;font-size:14px}
+.row .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .bar{height:16px;border-radius:3px;background:var(--go)}
+.row .bar.c{background:var(--mag)}
+.row .v{text-align:right;font-variant-numeric:tabular-nums}
+.sc{display:grid;grid-template-columns:minmax(8em,12em) repeat(3,minmax(0,1fr));gap:8px 10px;align-items:center;font-size:14px}
+.sc .h{color:var(--soft)}
+.dot{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:700;color:var(--soft);white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sev{font-weight:700;font-size:12px;border-radius:3px;padding:1px 6px;white-space:nowrap}
+.sev.CRITICAL{background:var(--mag);color:#fff}
+.sev.WARNING{background:var(--panel);border:1px solid var(--line)}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 14px}
+select,button.b{font:16px "Red Hat Text",sans-serif;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+button.b{cursor:pointer;font-weight:700}
+button.b:hover{border-color:var(--ink)}
+select:focus-visible,button.b:focus-visible{outline:3px solid var(--mag);outline-offset:1px}
+.mail{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px;font-size:15px;max-width:860px}
+.mail p{margin:0 0 10px}
+.mail table{margin:6px 0 12px;font-size:13px}
+.foot{border-top:1px solid var(--line);color:var(--soft);font-size:14px}
+.foot ul{margin:8px 0 0;padding-left:20px}
+@media(max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}.route{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}}
+@media(max-width:600px){.ml{display:block}.board{grid-template-columns:minmax(0,1fr)}.board .bh{display:none}.board .cl{margin-top:8px}.tile{min-height:58px}.route{grid-template-columns:repeat(2,minmax(0,1fr))}.row{grid-template-columns:minmax(0,9em) minmax(0,1fr) 2.6em}.sc{grid-template-columns:minmax(6em,8em) repeat(3,minmax(0,1fr))}table{font-size:13px}th,td{padding:6px 4px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flex;justify-content:space-between;gap:12px;border:0;padding:2px 0;text-align:right}.stack td::before{content:attr(data-l);color:var(--soft);text-align:left}}
+@media(prefers-reduced-motion:no-preference){.tile{transition:transform .12s}.tile:hover{transform:translateY(-2px)}}
+</style>
+</head>
+<body>
+<header class="band top">
+  <div class="wrap">
+    <h1 id="title">Four client files held, 119 records sent back for correction</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figs" id="figs"></div>
+    <p class="note">Synthetic data and fictional clients, built as a portfolio project. Control run as of <span id="asof"></span>.</p>
+  </div>
+</header>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Every file for every client and month</h2>
+    <p class="sub">Each tile is one file. Select a tile to see what the checks found and why it was loaded or held.</p>
+    <div class="board" id="board"></div>
+    <div class="legend">
+      <span><i style="background:var(--go)"></i>Loaded</span>
+      <span><i style="background:var(--go2)"></i>Loaded, some records held back</span>
+      <span><i style="background:var(--mag)"></i>Held, client must resend</span>
+      <span><i style="border:2px dashed var(--mag)"></i>Not received</span>
+      <span><i style="border-top:5px solid var(--late);height:9px"></i>Received late</span>
+    </div>
+    <div class="detail" id="detail" aria-live="polite"></div>
+  </div>
+</section>
+
+<section class="band" style="background:var(--panel)">
+  <div class="wrap">
+    <h2>One run, six steps, from inbox to production</h2>
+    <p class="sub">Python and DuckDB run each step; PowerShell repeats the intake step on a Windows file share. Every rule is one SQL query in a catalogue.</p>
+    <div class="route" id="route"></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap grid2">
+    <div>
+      <h2>Client quality scores by month</h2>
+      <p class="sub">Four equal parts: rows passing critical checks, control totals agreeing, files on time, files loaded.</p>
+      <div class="sc" id="scores"></div>
+    </div>
+    <div>
+      <h2>What the 31 checks found</h2>
+      <p class="sub">Exceptions by check. Magenta checks hold records back; navy ones load with a warning.</p>
+      <div class="rows" id="rules"></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" style="background:var(--panel)">
+  <div class="wrap">
+    <h2>The inforce block rolls forward each month</h2>
+    <p class="sub">Opening active policies, less terminations and unexplained drops, plus new and late-reported business, equals closing. A test checks that this balances for every client and month.</p>
+    <div class="scroll"><table class="stack" id="rf"></table></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Exception explorer</h2>
+    <div class="ctl">
+      <label for="fc" hidden>Client</label><select id="fc"></select>
+      <label for="fp" hidden>Month</label><select id="fp"></select>
+      <label for="fs" hidden>Severity</label><select id="fs"><option value="">All severities</option><option>CRITICAL</option><option>WARNING</option></select>
+    </div>
+    <p class="sub" id="ecount"></p>
+    <div class="scroll"><table class="stack" id="ex"></table></div>
+  </div>
+</section>
+
+<section class="band" style="background:var(--panel)">
+  <div class="wrap">
+    <h2>The follow-up each client gets</h2>
+    <p class="sub">Drafted from the exceptions, with the fix-by date five business days out. An Excel exception report goes with each one.</p>
+    <div class="ctl"><label for="fm" hidden>Client and month</label><select id="fm"></select><button class="b" id="copy" type="button">Copy text</button></div>
+    <div class="mail" id="mail"></div>
+  </div>
+</section>
+
+<footer class="band foot">
+  <div class="wrap">
+    <p><b>How it is tested.</b> The generator plants known problems in the files and writes an answer key. The tests prove every planted problem is caught, nothing clean is flagged, no failing record reaches production, and rows loaded plus rows held back equal rows received.</p>
+    <ul id="tests"></ul>
+  </div>
+</footer>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+{
+const D = JSON.parse(document.getElementById('data').textContent);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+const T = D.totals;
+const months = {"2026-07":"July 2026","2026-08":"August 2026","2026-09":"September 2026"};
+const mshort = {"2026-07":"Jul","2026-08":"Aug","2026-09":"Sep"};
+const types = ["inforce","billing","claims"];
+const cname = Object.fromEntries(D.cedants.map(c => [c.cedant_id, c.cedant_name]));
+const files = D.files.filter(f => f.decision !== 'REJECTED');
+const dup = D.files.filter(f => f.decision === 'REJECTED');
+
+document.getElementById('asof').textContent = new Date(D.as_of + 'T00:00').toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+document.getElementById('lede').textContent = `${fmt(T.rows_received)} records arrived in ${T.files_registered} files from 4 ceding companies for July to September 2026. ${T.files_go} files loaded, ${T.files_hold} were held for the client to resend, ${T.files_missing} never arrived and ${T.files_rejected} was a duplicate.`;
+const figs = [[fmt(T.rows_loaded), 'records loaded to production'], [fmt(T.rows_held_back), 'records held back', 1], [T.files_hold + ' + ' + T.files_missing, 'files held or missing', 1], [T.checks, 'checks on every file'], [D.planted.caught + ' / ' + D.planted.total, 'planted problems caught']];
+document.getElementById('figs').innerHTML = figs.map(f => `<div class="fg${f[2] ? ' hot' : ''}"><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+
+/* board */
+const fileOf = (c, p, t) => files.find(f => f.cedant_id === c && f.period === p && f.file_type === t);
+const cls = f => f.decision === 'MISSING' ? 'miss' : f.decision === 'HOLD' ? 'hold' : f.critical_rows > 0 ? 'part' : '';
+let html = '<div class="bh">Client</div>' + D.periods.map(p => `<div class="bh">${esc(months[p])}<small>inforce · billing · claims</small></div>`).join('');
+for (const c of D.cedants) {
+  html += `<div class="cl">${esc(c.cedant_name)}<small>${esc(c.country)} · ${esc(c.file_format)} · ${esc(c.currency)}</small></div>`;
+  for (const p of D.periods) {
+    html += `<div><div class="ml">${esc(months[p])}</div><div class="trio">` + types.map(t => {
+      const f = fileOf(c.cedant_id, p, t);
+      if (!f) return '<div></div>';
+      const isLate = f.decision !== 'MISSING' && f.days_late > 0;
+      const n = f.decision === 'MISSING' ? 'missing' : f.decision === 'HOLD' ? 'held' : f.critical_rows ? f.critical_rows + ' held back' : fmt(f.row_count);
+      return `<button class="tile ${cls(f)}${isLate ? ' late' : ''}" type="button" id="t-${esc(c.cedant_id)}-${esc(p)}-${t}" data-k="${esc(c.cedant_id)}|${esc(p)}|${t}" aria-label="${esc(c.cedant_name)} ${esc(months[p])} ${t}: ${esc(f.decision)}"><span class="ft">${t}</span><span class="n">${esc(n)}${isLate ? `<span class="lt"><br>${f.days_late}d late</span>` : ''}</span></button>`;
+    }).join('') + '</div></div>';
+  }
+}
+const board = document.getElementById('board');
+board.innerHTML = html;
+
+const detail = document.getElementById('detail');
+const showFile = key => {
+  const [c, p, t] = key.split('|');
+  const f = fileOf(c, p, t);
+  board.querySelectorAll('.tile').forEach(b => b.classList.toggle('sel', b.dataset.k === key));
+  const ex = D.exceptions.filter(e => e.cedant_id === c && e.period === p && e.file_type === t);
+  const verdict = f.decision === 'MISSING' ? 'Not received' : f.decision === 'HOLD' ? 'Held' : 'Loaded';
+  const ctl = f.control_count == null ? 'n/a' : (f.control_count === f.row_count && Math.abs((f.control_total || 0) - (f.amount_total || 0)) < 0.01 ? 'Agree' : 'Do not agree');
+  const extra = dup.filter(d => d.cedant_id === c && d.period === p && d.file_type === t);
+  detail.innerHTML = `<h3>${esc(cname[c])}, ${esc(months[p])} ${t} file: ${verdict}</h3>
+    <p class="sub" style="margin:4px 0 0">${esc(f.file_name)}. ${esc(f.decision_reason)}.${extra.length ? ' A second identical copy (' + esc(extra[0].file_name) + ') was rejected by its hash.' : ''}</p>
+    <div class="kv"><div>Records<b>${f.decision === 'MISSING' ? '0' : fmt(f.row_count)}</b></div><div>Held back<b>${fmt(f.critical_rows)}</b></div><div>Warnings<b>${fmt(f.warning_rows)}</b></div><div>Control totals<b>${ctl}</b></div><div>${f.decision === 'MISSING' ? 'Days overdue' : 'Days late'}<b>${fmt(f.days_late)}</b></div></div>
+    ${ex.length ? `<div class="scroll"><table class="stack"><thead><tr><th>Severity</th><th>Check</th><th>Record</th><th>Detail</th></tr></thead><tbody>${ex.slice(0, 12).map(e => `<tr><td data-l="Severity"><span class="sev ${esc(e.severity)}">${esc(e.severity.toLowerCase())}</span></td><td data-l="Check">${esc(e.rule_name)}</td><td data-l="Record">${esc(e.record_key || 'whole file')}</td><td data-l="Detail">${esc(e.detail)}</td></tr>`).join('')}</tbody></table></div>${ex.length > 12 ? `<p class="sub" style="margin-top:8px">and ${ex.length - 12} more in the explorer below.</p>` : ''}` : '<p>No exceptions. Every record loaded.</p>'}`;
+};
+board.addEventListener('click', e => { const b = e.target.closest('.tile'); if (b) showFile(b.dataset.k); });
+showFile('C02|2026-09|inforce');
+
+/* route */
+const staged = files.filter(f => f.decision !== 'MISSING').length;
+const route = [
+  ['Intake', T.files_registered, 'files hashed and registered; 1 duplicate, 1 missing, 3 late'],
+  ['Map', staged, 'files read in 4 layouts and mapped to one standard format'],
+  ['Controls', 2, 'files failed count or total against the client control', 1],
+  ['Rules', fmt(T.exceptions), 'exceptions from 23 SQL rules and 8 file checks', 1],
+  ['Gate', T.files_go + ' GO', T.files_hold + ' files held; failing records held back in the rest'],
+  ['Load', fmt(T.rows_loaded), 'clean records in production, tagged with the load batch']];
+document.getElementById('route').innerHTML = route.map(r => `<div class="st${r[3] ? ' hot' : ''}"><h3>${esc(r[0])}</h3><b>${esc(r[1])}</b><p>${esc(r[2])}</p></div>`).join('');
+
+/* scores */
+const col = s => s >= 99 ? 'var(--go)' : s >= 85 ? 'var(--go2)' : 'var(--mag)';
+document.getElementById('scores').innerHTML = '<div class="h"></div>' + D.periods.map(p => `<div class="h">${esc(mshort[p])}</div>`).join('') +
+  D.cedants.map(c => `<div>${esc(c.cedant_name)}</div>` + D.periods.map(p => {
+    const s = D.client_scores.find(x => x.cedant_id === c.cedant_id && x.period === p);
+    return `<div class="dot" style="background:${col(s.quality_score)};${s.quality_score >= 85 && s.quality_score < 99 ? 'color:var(--ink)' : ''}" title="${esc(s.files_held)} held, ${esc(s.files_missing)} missing, ${esc(s.files_late)} late">${esc(s.quality_score.toFixed(0))}</div>`;
+  }).join('')).join('');
+
+/* rules */
+const rc = D.rule_counts.filter(r => r.exceptions > 0).sort((a, b) => b.exceptions - a.exceptions);
+const max = Math.max(...rc.map(r => r.exceptions));
+document.getElementById('rules').innerHTML = rc.map(r => `<div class="row"><span class="lab" title="${esc(r.rule_id)}">${esc(r.rule_name)}</span><span><span class="bar${r.severity === 'CRITICAL' ? ' c' : ''}" style="display:block;width:${Math.max(2, 100 * r.exceptions / max)}%"></span></span><span class="v">${fmt(r.exceptions)}</span></div>`).join('');
+
+/* roll-forward */
+const rf = D.rollforward;
+const rh = ['Client', 'Month', 'Opening', 'Lapsed', 'Claims', 'Dropped', 'New', 'Late', 'Closing'];
+document.getElementById('rf').innerHTML = `<thead><tr>${rh.map((h, i) => `<th class="${i > 1 ? 'num' : ''}">${h}</th>`).join('')}</tr></thead><tbody>` +
+  rf.map(r => `<tr><td data-l="Client">${esc(cname[r.cedant_id])}</td><td data-l="Month">${esc(mshort[r.period])}</td><td class="num" data-l="Opening">${fmt(r.opening_active)}</td><td class="num" data-l="Lapsed">−${fmt(r.lapsed)}</td><td class="num" data-l="Claims">−${fmt(r.claims_terminations)}</td><td class="num" data-l="Dropped" style="${r.disappeared ? 'color:var(--mag);font-weight:700' : ''}">−${fmt(r.disappeared)}</td><td class="num" data-l="New">+${fmt(r.new_business)}</td><td class="num" data-l="Late" style="${r.late_reported ? 'color:var(--mag);font-weight:700' : ''}">+${fmt(r.late_reported)}</td><td class="num" data-l="Closing"><b>${fmt(r.closing_active)}</b></td></tr>`).join('') + '</tbody>';
+
+/* explorer */
+const fc = document.getElementById('fc'), fp = document.getElementById('fp'), fs = document.getElementById('fs');
+fc.innerHTML = '<option value="">All clients</option>' + D.cedants.map(c => `<option value="${esc(c.cedant_id)}">${esc(c.cedant_name)}</option>`).join('');
+fp.innerHTML = '<option value="">All months</option>' + D.periods.map(p => `<option value="${esc(p)}">${esc(months[p])}</option>`).join('');
+const drawEx = () => {
+  const rows = D.exceptions.filter(e => (!fc.value || e.cedant_id === fc.value) && (!fp.value || e.period === fp.value) && (!fs.value || e.severity === fs.value));
+  document.getElementById('ecount').textContent = `${rows.length} exceptions${rows.length > 60 ? ', first 60 shown' : ''}.`;
+  document.getElementById('ex').innerHTML = '<thead><tr><th>Client</th><th>Month</th><th>File</th><th>Severity</th><th>Check</th><th>Record</th><th>Detail</th></tr></thead><tbody>' +
+    rows.slice(0, 60).map(e => `<tr><td data-l="Client">${esc(e.cedant_id)}</td><td data-l="Month">${esc(mshort[e.period])}</td><td data-l="File">${esc(e.file_type)}</td><td data-l="Severity"><span class="sev ${esc(e.severity)}">${esc(e.severity.toLowerCase())}</span></td><td data-l="Check">${esc(e.rule_name)}</td><td data-l="Record">${esc(e.record_key || 'whole file')}</td><td data-l="Detail">${esc(e.detail)}</td></tr>`).join('') + '</tbody>';
+};
+[fc, fp, fs].forEach(s => s.addEventListener('change', drawEx));
+drawEx();
+
+/* follow-up drafts */
+const fm = document.getElementById('fm');
+const keys = Object.keys(D.followup_texts);
+fm.innerHTML = keys.map(k => { const [c, p] = k.split('_'); return `<option value="${esc(k)}">${esc(cname[c])}, ${esc(months[p])}</option>`; }).join('');
+fm.value = 'C02_2026-09_followup';
+const md = txt => {
+  const out = []; let tbl = [];
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/_(Draft.+?)_/g, '<i>$1</i>');
+  const flush = () => { if (!tbl.length) return; const cells = r => r.replace(/\\\|/g, '¦').split('|').slice(1, -1).map(x => inline(x.trim().replace(/¦/g, '|')));
+    const head = cells(tbl[0]); out.push('<div class="scroll"><table><thead><tr>' + head.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' + tbl.slice(2).map(r => '<tr>' + cells(r).map(x => `<td>${x}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>'); tbl = []; };
+  for (const line of txt.split('\n')) {
+    if (line.startsWith('|')) { tbl.push(line); continue; }
+    flush();
+    if (!line.trim()) continue;
+    out.push(line.trim().startsWith('- ') ? `<p style="margin:0 0 4px ${line.startsWith('  ') ? 36 : 14}px">• ${inline(line.trim().slice(2))}</p>` : `<p>${inline(line)}</p>`);
+  }
+  flush();
+  return out.join('');
+};
+const drawMail = () => { document.getElementById('mail').innerHTML = md(D.followup_texts[fm.value]); };
+fm.addEventListener('change', drawMail);
+drawMail();
+document.getElementById('copy').addEventListener('click', async e => {
+  try { await navigator.clipboard.writeText(D.followup_texts[fm.value].replace(/\*\*/g, '')); e.target.textContent = 'Copied'; }
+  catch { e.target.textContent = 'Copy not allowed here'; }
+  setTimeout(() => { e.target.textContent = 'Copy text'; }, 1800);
+});
+
+document.getElementById('tests').innerHTML = D.tests.map(t => `<li>${esc(t)}</li>`).join('');
+}
+</script>
+</body>
+</html>
