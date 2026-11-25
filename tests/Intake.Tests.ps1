@@ -32,7 +32,8 @@ Describe 'Invoke-FileIntake' {
     }
 
     It 'flags the three late Atlantic Mutual files for 2026-08' {
-        $late = @($result | Where-Object { $_.DaysLate -gt 0 })
+        # the rejected duplicate also arrived after the due date, but it is not a received file
+        $late = @($result | Where-Object { $_.Status -eq 'RECEIVED' -and $_.DaysLate -gt 0 })
         $late.Count | Should -Be 3
         ($late | ForEach-Object Cedant | Sort-Object -Unique) | Should -Be 'C04'
         ($late | ForEach-Object Period | Sort-Object -Unique) | Should -Be '2026-08'
