@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -33,12 +34,21 @@ def run(db_path: Path | None = None, regenerate: bool = False, quiet: bool = Fal
         hold_rate: float | None = None) -> dict:
     """Run everything. With `workdir`, the inbox, archive, answer key and outputs all live under it."""
     log = (lambda *a: None) if quiet else print
+    timings: list[tuple[str, float, int, str]] = []
+    clock = [time.perf_counter()]
+
+    def lap(stage: str, items: int, unit: str) -> None:
+        now = time.perf_counter()
+        timings.append((stage, round(now - clock[0], 3), int(items), unit))
+        clock[0] = now
+
     inbox, archive, out, key = INBOX, ARCHIVE, OUTPUT, DATA_DIR / "answer_key.csv"
     if workdir is not None:
         workdir = Path(workdir)
         inbox, archive, out, key = workdir / "inbox", workdir / "archive", workdir / "output", workdir / "answer_key.csv"
     if regenerate:
         generate.main(seed=seed, inbox=inbox, key_path=key, profile=profile, quiet=quiet)
+        lap("Generate synthetic client files (test data only)", len(list(inbox.iterdir())), "files")
     cfg = load_config()
     if hold_rate is not None:
         cfg["critical_rate_hold"] = hold_rate
@@ -62,6 +72,7 @@ def run(db_path: Path | None = None, regenerate: bool = False, quiet: bool = Fal
     reg = intake.register_files(cfg, inbox)
     missing = intake.missing_files(cfg, reg)
     intake.archive(reg, archive)
+    lap("Intake: hash, register, archive, late and missing checks", len(reg), "files")
     log(f"Intake: {len(reg)} files registered, {len(missing)} missing, "
         f"{(reg.status == 'REJECTED_DUPLICATE').sum()} duplicate")
 
@@ -110,6 +121,7 @@ def run(db_path: Path | None = None, regenerate: bool = False, quiet: bool = Fal
         validate.add_file_exception(file_exc, {**m.to_dict(), "file_id": None}, "FL004",
                                     f"Expected {m['expected_name']} by {m['due_date']}; {m['days_overdue']} days overdue")
 
+    lap("Read and map four layouts; control totals; layout checks", int(reg["row_count"].sum()), "records")
     reg_out = reg.drop(columns=["path"])
     con.execute("CREATE TABLE file_register AS SELECT * FROM reg_out")
     con.execute("CREATE TABLE missing_file AS SELECT * FROM missing") if len(missing) else \
@@ -129,13 +141,16 @@ def run(db_path: Path | None = None, regenerate: bool = False, quiet: bool = Fal
     # 3. validate ---------------------------------------------------------------------------
     validate.create_exceptions_table(con)
     validate.insert_rows(con, file_exc)
+    lap("Stage records in the warehouse", int(reg["row_count"].sum()), "records")
     counts = validate.run_rules(con, rules)
+    lap("Run 23 SQL rules", sum(counts.values()), "exceptions found")
     log("Rules: " + ", ".join(f"{k}={v}" for k, v in counts.items() if v))
 
     # 4. decide and promote -----------------------------------------------------------------
     decisions = validate.decide(con, cfg["critical_rate_hold"], cfg["hold_min_rows"])
     batch = f"B{AS_OF:%Y%m%d}-{datetime.now():%H%M%S}"
     promoted = validate.promote(con, batch)
+    lap("Gate decisions and load to production", sum(promoted.values()), "records loaded")
     log(f"Decisions: {decisions.decision.value_counts().to_dict()}; promoted {promoted}")
 
     # 5. outputs ----------------------------------------------------------------------------
@@ -146,10 +161,13 @@ def run(db_path: Path | None = None, regenerate: bool = False, quiet: bool = Fal
     rm = pd.DataFrame(rules_meta)
     con.execute("CREATE TABLE ref_rule AS SELECT * FROM rm")
     summary = report.build_all(con, cfg, out)
+    lap("Scorecards, Excel reports, follow-ups, Power BI extracts", len(list((out / "exception_reports").glob("*.xlsx"))), "client reports")
+    tl = pd.DataFrame(timings, columns=["stage", "seconds", "count", "unit"])
+    con.execute("CREATE OR REPLACE TABLE run_log AS SELECT * FROM tl")
     con.close()
     log(f"Outputs written to {out}")
     return {"decisions": decisions, "promoted": promoted, "rule_counts": counts, "summary": summary,
-            "db_path": db_path, "out": out, "answer_key": key, "inbox": inbox}
+            "db_path": db_path, "out": out, "answer_key": key, "inbox": inbox, "timings": timings}
 
 
 def main() -> None:

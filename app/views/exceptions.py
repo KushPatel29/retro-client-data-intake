@@ -82,7 +82,12 @@ tm = t2.selectbox("Month", list(core.MONTHS), format_func=core.MONTHS.get, index
 te = exc[(exc.cedant_id == tc) & (exc.period == tm)]
 tf = core.q("SELECT * FROM mart_file_scorecard WHERE cedant_id = ? AND period = ?", [tc, tm])
 with st.container(border=True):
-    st.markdown("\n\n".join(ai.triage_offline(te, tf)))
+    tri = ai.triage_offline(te, tf)
+    st.markdown("\n\n".join(tri))
+if st.session_state.get("tri_logged") != (tc, tm):
+    core.log_ai("Exception triage", "offline knowledge base", f"{core.cname(tc)} {tm}", tri[0] if tri else "",
+                "Shown as suggestions to confirm with the client")
+    st.session_state["tri_logged"] = (tc, tm)
 if ai.llm_available() and st.button("Ask Claude for a root-cause write-up"):
     with st.spinner("Asking Claude..."):
         try:

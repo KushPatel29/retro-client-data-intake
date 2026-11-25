@@ -60,7 +60,20 @@ GROUP BY ALL
 ORDER BY smoker_pct DESC"""
 start = st.radio("Start from", ["Selected rule", "A new draft"], horizontal=True)
 sql = st.text_area("SQL", value=(rule["sql"] if (rule and start == "Selected rule") else EXAMPLE), height=230)
-if st.button("Run on staged data", type="primary"):
+b1, b2 = st.columns([1, 1])
+explain = b2.button("Show the query plan")
+if explain:
+    con = core.safe_con()
+    try:
+        plan = con.execute("EXPLAIN " + safesql.check(sql)).fetchall()
+        st.code("\n".join(str(r[-1]) for r in plan), language=None)
+        st.caption("Look for full scans of large tables inside correlated subqueries; set-based joins and filters on keys "
+                   "are what keep these rules fast at scale. On SQL Server the same reading applies to the execution plan.")
+    except Exception as e:
+        st.error(str(e))
+    finally:
+        con.close()
+if b1.button("Run on staged data", type="primary"):
     con = core.safe_con()
     try:
         out = safesql.run(con, sql)

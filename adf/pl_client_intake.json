@@ -1,0 +1,241 @@
+{
+  "name": "pl_client_intake",
+  "properties": {
+    "description": "TEMPLATE (not deployed): monthly client file intake. Mirrors the Python pipeline in this repo: register, stage, validate, gate and promote, then refresh Power BI and alert on failure.",
+    "parameters": {
+      "Period": {
+        "type": "string",
+        "defaultValue": "2026-09"
+      }
+    },
+    "activities": [
+      {
+        "name": "GetInboxFiles",
+        "type": "GetMetadata",
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "ds_inbox_folder",
+            "type": "DatasetReference"
+          },
+          "fieldList": [
+            "childItems"
+          ]
+        }
+      },
+      {
+        "name": "ForEachClientFile",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "GetInboxFiles",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('GetInboxFiles').output.childItems",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 4,
+          "activities": [
+            {
+              "name": "GetFileHash",
+              "type": "GetMetadata",
+              "typeProperties": {
+                "dataset": {
+                  "referenceName": "ds_inbox_file",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "fileName": "@item().name"
+                  }
+                },
+                "fieldList": [
+                  "contentMD5",
+                  "size",
+                  "lastModified"
+                ]
+              }
+            },
+            {
+              "name": "RegisterFile",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "GetFileHash",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 60
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_sqlserver_dq",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "storedProcedureName": "dq.usp_RegisterFile",
+                "storedProcedureParameters": {
+                  "FileName": {
+                    "value": "@item().name",
+                    "type": "String"
+                  },
+                  "ContentHash": {
+                    "value": "@activity('GetFileHash').output.contentMD5",
+                    "type": "String"
+                  },
+                  "Bytes": {
+                    "value": "@activity('GetFileHash').output.size",
+                    "type": "Int64"
+                  },
+                  "ReceivedAt": {
+                    "value": "@activity('GetFileHash').output.lastModified",
+                    "type": "DateTime"
+                  }
+                }
+              }
+            },
+            {
+              "name": "MapAndStage",
+              "type": "AzureFunctionActivity",
+              "description": "Applies the client's mapping from clients.yaml (columns, dates, codes, units) and bulk-loads stg tables",
+              "dependsOn": [
+                {
+                  "activity": "RegisterFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "ls_func_mapping",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "functionName": "map_and_stage",
+                "method": "POST",
+                "body": {
+                  "value": "@json(concat('{\"fileName\":\"', item().name, '\"}'))",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "ValidateFile",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "MapAndStage",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 60
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_sqlserver_dq",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "storedProcedureName": "dq.usp_ValidateInforce",
+                "storedProcedureParameters": {
+                  "FileId": {
+                    "value": "@activity('MapAndStage').output.fileId",
+                    "type": "String"
+                  }
+                }
+              }
+            },
+            {
+              "name": "GateAndPromote",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "ValidateFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 60
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_sqlserver_dq",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "storedProcedureName": "dq.usp_GateAndPromote",
+                "storedProcedureParameters": {
+                  "FileId": {
+                    "value": "@activity('MapAndStage').output.fileId",
+                    "type": "String"
+                  },
+                  "LoadBatch": {
+                    "value": "@pipeline().RunId",
+                    "type": "String"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "RefreshPowerBI",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "ForEachClientFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "url": "https://api.powerbi.com/v1.0/myorg/groups/{workspaceId}/datasets/{datasetId}/refreshes",
+          "method": "POST",
+          "body": {
+            "notifyOption": "NoNotification"
+          },
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://analysis.windows.net/powerbi/api"
+          }
+        }
+      },
+      {
+        "name": "AlertOnFailure",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "ForEachClientFile",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "url": "@pipeline().globalParameters.TeamsWebhook",
+          "method": "POST",
+          "body": {
+            "value": "@json(concat('{\"text\":\"Client intake failed for ', pipeline().parameters.Period, '\"}'))",
+            "type": "Expression"
+          }
+        }
+      }
+    ]
+  }
+}

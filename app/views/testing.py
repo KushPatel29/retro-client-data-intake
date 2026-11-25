@@ -31,10 +31,34 @@ if len(pr):
 else:
     st.info("The clean scenario plants nothing; the test is that nothing is flagged.")
 
+st.subheader("AI evaluation")
+st.write("Each AI feature is scored against a labelled test set on every run, so its accuracy is measured rather than "
+         "claimed. Results are shown as they come out, misses included.")
+from retro_intake import aieval  # noqa: E402
+
+@st.cache_data(show_spinner=False)
+def _evals(db: str, inbox: str):
+    from pathlib import Path
+    return aieval.eval_mapping(Path(inbox)), aieval.eval_ask(Path(db)), aieval.eval_runbook()
+
+em, ea, er = _evals(str(core.db_path()), str(res["inbox"]))
+k = st.columns(4)
+k[0].metric("Mapping assistant: fields right", f"{int(round(em.score.mean() * 12 * len(em)))}/{12 * len(em)}")
+k[1].metric("Ask the data: answers right", f"{int(ea.correct.sum())}/{len(ea)}")
+k[2].metric("Runbook search: right section first", f"{int(er['top 1'].sum())}/{len(er)}")
+k[3].metric("Runbook search: right section in top 3", f"{int(er['top 3'].sum())}/{len(er)}")
+e1, e2, e3 = st.tabs(["Mapping assistant", "Ask the data", "Ask the runbook"])
+e1.dataframe(em.drop(columns=["score"]), hide_index=True, width="stretch")
+e1.caption("Four known client layouts plus one the assistant has never seen; compared with the signed-off mapping.")
+e2.dataframe(ea, hide_index=True, width="stretch")
+e2.caption("The offline parser's SQL is run and its result compared with a reference query's result.")
+e3.dataframe(er, hide_index=True, width="stretch")
+e3.caption("Misses are kept visible: the right section still appears in the top three, and every answer cites its sources.")
+
 st.subheader("Automated test suite")
-st.write("50 pytest tests: detection on several seeds and profiles, no false alarms, every rule exercised, expected holds, no critical "
+st.write("56 pytest tests: detection on several seeds and profiles, no false alarms, every rule exercised, expected holds, no critical "
          "record in production, rows loaded + held back = rows received, roll-forward balances, layout mapping, AI helpers, SQL "
-         "guardrails, and every app page. The button runs the 36 engine tests; the 14 page tests run in CI.")
+         "guardrails, and every app page. The button runs the 38 engine tests; the 18 page tests run in CI.")
 if st.button("Run the engine tests now"):
     with st.spinner("Running pytest (about 30 seconds)..."):
         p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(core.ROOT / "tests"),

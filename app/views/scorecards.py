@@ -67,4 +67,22 @@ buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
     for f in sorted(folder.glob("*.csv")):
         z.write(f, f.name)
+with st.expander("DAX measures for the Power BI model"):
+    st.code("""Rows Received = SUM ( fact_file[row_count] )
+Rows Held Back = SUM ( fact_file[critical_rows] )
+Row Pass Rate = DIVIDE ( [Rows Received] - [Rows Held Back], [Rows Received] )
+Files Expected = COUNTROWS ( FILTER ( fact_file, fact_file[decision] <> "REJECTED" ) )
+Files On Time =
+    CALCULATE ( [Files Expected], fact_file[decision] <> "MISSING", fact_file[days_late] = 0 )
+Files Loaded = CALCULATE ( [Files Expected], fact_file[decision] = "GO" )
+Controls Agree = CALCULATE ( [Files Expected], fact_file[controls_ok] = TRUE () )
+Quality Score =
+    100 * ( 0.25 * [Row Pass Rate]
+          + 0.25 * DIVIDE ( [Controls Agree], [Files Expected] )
+          + 0.25 * DIVIDE ( [Files On Time], [Files Expected] )
+          + 0.25 * DIVIDE ( [Files Loaded], [Files Expected] ) )
+Quality Score vs Last Month =
+    [Quality Score] - CALCULATE ( [Quality Score], PREVIOUSMONTH ( dim_date[date] ) )
+Critical Exceptions = CALCULATE ( COUNTROWS ( fact_exception ), dim_rule[severity] = "CRITICAL" )""", language="dax")
+    st.caption("dim_date is a standard date table related to the period; the other tables are in the extract.")
 st.download_button("Download the Power BI extracts (zip)", buf.getvalue(), file_name="retro_intake_powerbi.zip")

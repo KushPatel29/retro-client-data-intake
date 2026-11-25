@@ -22,8 +22,14 @@ class Refused(ValueError):
 
 def connect(db_path: Path) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(str(db_path), read_only=True)
-    con.execute("SET enable_external_access = false")
-    con.execute("SET lock_configuration = true")
+    try:
+        con.execute("SET enable_external_access = false")
+        con.execute("SET lock_configuration = true")
+    except duckdb.InvalidInputException:
+        pass  # another connection in this process already locked the shared database instance
+    if str(con.execute("SELECT current_setting('enable_external_access')").fetchone()[0]).lower() != "false":
+        con.close()
+        raise Refused("Could not switch off external access; refusing to run free-form SQL.")
     return con
 
 

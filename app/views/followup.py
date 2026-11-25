@@ -57,6 +57,8 @@ with c2:
     sent = st.session_state.setdefault("sent", set())
     if st.button("Mark as sent", type="primary", width="stretch", disabled=pick in sent):
         sent.add(pick)
+        core.log_ai("Follow-up drafting", "Claude" if mode == "Claude" else "templates", f"{labels[pick]}, tone {tone}",
+                    edited[:200], "Edited and approved by user" if edited != email else "Approved by user unchanged")
         st.rerun()
     st.caption(f"Marked as sent this session: {len(sent)} of {len(labels)}.")
 core.guardrails(["The draft only uses facts from the exception data; the AI rewrite must keep every file name, "

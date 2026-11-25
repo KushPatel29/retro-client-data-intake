@@ -9,6 +9,7 @@ P = "views/"
 pages = {
     "Overview": [
         st.Page(P + "home.py", title="Control room", icon=":material/dashboard:", default=True),
+        st.Page(P + "executive.py", title="Executive summary", icon=":material/summarize:"),
         st.Page(P + "role.py", title="Role coverage", icon=":material/checklist:"),
     ],
     "Monthly run": [
@@ -22,10 +23,15 @@ pages = {
     ],
     "Reporting": [
         st.Page(P + "scorecards.py", title="Quality scorecards", icon=":material/monitoring:"),
+        st.Page(P + "trends.py", title="Trends and anomalies", icon=":material/trending_up:"),
     ],
     "GenAI assistants": [
         st.Page(P + "ask_data.py", title="Ask the data", icon=":material/chat:"),
         st.Page(P + "ask_runbook.py", title="Ask the runbook", icon=":material/menu_book:"),
+    ],
+    "Platform": [
+        st.Page(P + "architecture.py", title="Architecture and Azure roadmap", icon=":material/cloud:"),
+        st.Page(P + "automation.py", title="Automation", icon=":material/bolt:"),
     ],
     "Controls and governance": [
         st.Page(P + "testing.py", title="Testing and UAT", icon=":material/science:"),

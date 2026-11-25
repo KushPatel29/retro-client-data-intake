@@ -64,6 +64,9 @@ SCHEMA_DRIFT = {("C02", "2026-09", "inforce"): ("TobaccoCd", "TobaccoUse")}
 MISSING_FILES = {("C03", "2026-08", "claims")}
 RESENT_FILES = {("C01", "2026-08", "billing")}
 LATE_PERIODS = {("C04", "2026-08"): 14}
+# Real business events (not data errors) that the Trends page should surface
+LAPSE_SWEEP = {("C04", "2026-08"): 6}        # lapse rate x6: a block of policies lapsed in one month
+NEW_BUSINESS_SURGE = {("C01", "2026-09"): 6}  # new business x6: a large group block added
 
 
 class Raw(str):
@@ -96,6 +99,8 @@ class Generator:
         self.missing = MISSING_FILES if on else set()
         self.resent = RESENT_FILES if on else set()
         self.late = LATE_PERIODS if on else {}
+        self.sweep = LAPSE_SWEEP if on else {}
+        self.surge = NEW_BUSINESS_SURGE if on else {}
 
     # ------------------------------------------------------------------ records
     def new_id(self, cid: str) -> str:
@@ -158,7 +163,8 @@ class Generator:
             active = [p for p in book if p["status"] == "ACTIVE"]
             claims = []
             r.shuffle(active)
-            n_lapse, n_death = max(1, int(len(active) * 0.006)), max(1, int(len(active) * 0.0012))
+            n_lapse = max(1, int(len(active) * 0.006 * self.sweep.get((cid, period), 1)))
+            n_death = max(1, int(len(active) * 0.0012))
             for p in active[:n_lapse]:
                 p["status"] = "LAPSED"
             for p in active[n_lapse:n_lapse + n_death]:
@@ -167,7 +173,8 @@ class Generator:
                 claim_seq += 1
                 claims.append(self.claim(cid, claim_seq, p, p0, p1, "CRITICAL_ILLNESS" if ci else "DEATH"))
             # new business issued in this period
-            new = [self.new_policy(cid, p0, p1) for _ in range(max(1, int(len(active) * 0.01)))]
+            n_new = max(1, int(len(active) * 0.01 * self.surge.get((cid, period), 1)))
+            new = [self.new_policy(cid, p0, p1) for _ in range(n_new)]
             for rule, n in self.new_flags.get((cid, period), []):
                 for _ in range(n):
                     if rule == "IF010":
@@ -274,8 +281,10 @@ class Generator:
         normal = [b for b in billing if b["transaction_type"] != "REVERSAL"]
         r.shuffle(normal)
         pool, ccy = iter(normal), self.cfg["clients"][cid]["currency"]
-        lapsed = [p for p in inforce if p["status"] == "LAPSED"
-                  and not any(b["policy_id"] == p["policy_id"] and b["life_id"] == p["life_id"] for b in billing)]
+        billed = {(b["policy_id"], b["life_id"]) for b in billing}
+        lapsed = [p for p in inforce if p["status"] == "LAPSED" and (p["policy_id"], p["life_id"]) not in billed]
+        lapsed = [p for p in inforce if p["status"] in ("DEATH", "CI_PAID")
+                  and (p["policy_id"], p["life_id"]) not in billed] + lapsed   # pop() takes lapsed ones first
         for rule, n in sched:
             for _ in range(n):
                 if rule == "BL001":
@@ -285,6 +294,8 @@ class Generator:
                     self.add_key(cid, period, "billing", rule, f"{pid}|1")
                     continue
                 if rule == "BL003":
+                    if not lapsed:
+                        continue
                     p = lapsed.pop()
                     prem = treaty_monthly_premium(self.cfg["clients"][cid]["rate_basis"], p["face_amount"],
                                                   p["retro_share"], age_last_birthday(p["insured_dob"], period_end(period)),
@@ -320,7 +331,10 @@ class Generator:
                     c = self.claim(cid, seq, p, p0, p1, "DEATH")
                     claims.append(c)
                 else:
-                    c = next(x for x in claims if x["claim_id"] not in {k["record_key"] for k in self.key})
+                    used = {k["record_key"] for k in self.key}
+                    c = next((x for x in claims if x["claim_id"] not in used), None)
+                    if c is None:                    # not enough claims this month for the planted case
+                        continue
                     if rule == "CL002":
                         pol = next(p for p in inforce if p["policy_id"] == c["policy_id"])
                         c["date_of_event"] = pol["issue_date"] - timedelta(days=45)

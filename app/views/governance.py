@@ -43,6 +43,26 @@ if len(trail):
 else:
     st.write("No production record with that policy number (it may have been held back or not exist).")
 
+st.subheader("AI use register")
+st.dataframe(pd.DataFrame([
+    ("Mapping assistant", "Suggest how a new client layout maps", "Column names and sample values (Claude mode only)",
+     "Person edits and test-runs before sign-off", "Low"),
+    ("Ask the data", "Answer ad hoc questions with SQL", "Table and column names only", "SQL shown; read-only; row limit", "Low"),
+    ("Ask the runbook", "Answer process questions", "Runbook passages only", "Cited passages; says when not covered", "Low"),
+    ("Exception triage", "Suggest likely causes", "Exception counts only", "Labelled as unconfirmed", "Low"),
+    ("Follow-up drafting", "Rewrite email tone", "The draft email (policy numbers, no personal data)",
+     "Person edits and approves; nothing is sent from the app", "Medium"),
+    ("Executive narrative", "Summarise the month", "Aggregated figures only", "Shown for review", "Low"),
+], columns=["feature", "purpose", "data sent to a model", "human control", "risk"]), hide_index=True, width="stretch")
+
+st.subheader("AI audit log (this session)")
+log = st.session_state.get("ai_log", [])
+if log:
+    st.dataframe(pd.DataFrame(log), hide_index=True, width="stretch")
+else:
+    st.write("No AI actions yet in this session. Ask a question on Ask the data or Ask the runbook, test a mapping, "
+             "or approve a follow-up, and each action is recorded here with what the person did with it.")
+
 st.subheader("Controls")
 st.dataframe(pd.DataFrame([
     ("Access", "Least privilege by role; personal fields masked outside production"),

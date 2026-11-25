@@ -13,24 +13,28 @@ wrong, load what is right, and tell each client exactly what to fix.
 
 ## The Streamlit app
 
-`streamlit run app/streamlit_app.py` opens a 14-page app that walks through the whole job, top to bottom:
+`streamlit run app/streamlit_app.py` opens an 18-page app that walks through the whole job, top to bottom:
 
 | Section | Page | What you can do |
 | --- | --- | --- |
 | Overview | Control room | Click any file on the board of every client, month and file type; read an AI briefing per client |
+| | Executive summary | One page for leadership: month KPIs vs last month, ceded exposure not yet loaded, decisions needed, risk register, narrative, download |
 | | Role coverage | Every responsibility in the job posting, linked to the page that does it |
 | Monthly run | 1. Intake and file tracking | Arrival timeline vs due dates, file register, duplicates by hash; **upload a client file** and watch it get hashed, matched, parsed and checked against its controls |
-| | 2. Mapping and onboarding | See each client's raw layout next to the standard format; **onboard a new client with the AI mapping assistant**, edit its suggestions, test-run them through the real rules and get the config entry |
-| | 3. Validation rules | Rule catalogue with SQL; **rule workbench** to draft and run a new rule on staged data (read-only) |
+| | 2. Mapping and onboarding | Raw layout next to the standard format; **onboard a new client with the AI mapping assistant**; generated client data specification and treaty register |
+| | 3. Validation rules | Rule catalogue with SQL; **rule workbench** to draft and run a new rule (read-only) and see its query plan |
 | | 4. Reconciliation | Control totals, inforce roll-forward waterfall, every premium against the treaty rate, claims against ceded amount |
 | | 5. Exceptions and root cause | Pareto, client heatmap, recurring issues, a policy's full history, AI triage, case tracker |
 | | 6. Client follow-up | Drafted email per client and month, four tones (or Claude), edit, download with the Excel report |
 | | 7. Gate and load | **What-if sliders** for the hold limit; see which files would change decision; data lineage |
-| Reporting | Quality scorecards | Score heatmap and trend, what drives each score, loaded portfolio, Power BI extracts |
+| Reporting | Quality scorecards | Score heatmap and trend, what drives each score, loaded portfolio, Power BI extracts and DAX measures |
+| | Trends and anomalies | Month-over-month movement flags per client (volume, face, lapse rate, mix, premium) with the question to ask, largest exposures |
 | GenAI assistants | Ask the data | Plain-English questions become SQL you can see and edit, run under guardrails |
 | | Ask the runbook | Retrieval-augmented answers from the runbook and rule catalogue, with citations |
-| Controls | Testing and UAT | Planted vs caught by check, run the test suite, **change-impact** comparison, UAT sign-off |
-| | Data governance | Data dictionary with classification, audit trail from a production record to its file hash, controls |
+| Platform | Architecture and Azure roadmap | Target architecture on SQL Server, ADF/Fabric, Power BI and Azure OpenAI; ADF pipeline template; T-SQL; security; phased rollout |
+| | Automation | Measured time per pipeline step, manual vs automated, time-saved calculator with your own assumptions |
+| Controls | Testing and UAT | Planted vs caught by check, **AI evaluation** on labelled test sets, run the test suite, change-impact comparison, UAT sign-off |
+| | Data governance | Data dictionary with classification, audit trail to the file hash, AI use register, **AI audit log**, controls |
 
 The sidebar regenerates the whole quarter with any seed and three defect profiles (baseline, heavy, clean), and every page
 updates. Each run is scored against its answer key.
@@ -48,7 +52,9 @@ the app's secrets (model set by `RETRO_AI_MODEL`):
 | Exception triage | Concentration analysis plus a knowledge base of likely causes | Root-cause write-up |
 | Follow-up tone | Template rewrites | Rewrite that must keep every fact |
 
-Guardrails: AI output is always shown to a person first; generated SQL runs on a read-only connection with external
+Measured accuracy (Testing and UAT page, re-run every time): mapping assistant 60/60 fields across five layouts, one never seen before; ask the data 10/10 on a labelled question set; runbook search finds the right section first for 10 of 12 questions and in the top three for 12 of 12.
+
+Guardrails: AI output is always shown to a person first; every AI action goes to an audit log; generated SQL runs on a read-only connection with external
 access off, one SELECT only and a 500-row limit (`safesql.py`, tested); only table and column names are sent to the model,
 never client records; AI never decides what loads.
 
@@ -89,8 +95,8 @@ flowchart LR
 | --- | --- |
 | Files registered | 36 (+1 expected file never received) |
 | Decisions | 31 GO, 4 HOLD, 1 rejected duplicate |
-| Rows received | 66,740 |
-| Rows loaded to production | 54,523 |
+| Rows received | 66,848 |
+| Rows loaded to production | 54,702 |
 | Rows held back for correction | 119 |
 | Checks | 31 (23 SQL rules + 8 file-level checks) |
 | Planted problems caught | 156 of 156, 0 false alarms (also tested on other seeds, a heavy profile with 432 problems, and a clean profile) |
@@ -99,7 +105,7 @@ The four held files, and why:
 
 | File | Reason |
 | --- | --- |
-| `HRL_billing_202608.txt` | Control file says 4,036 records, file has 4,033 |
+| `HRL_billing_202608.txt` | Control file says 4,041 records, file has 4,038 |
 | `Kestrel_inforce_202609.xlsx` | Face amount total is 12,345.67 off the control sheet |
 | `HRL_inforce_202609.txt` | Client renamed `TobaccoCd` to `TobaccoUse` without notice |
 | `AMR_inforce_202609.dat` | 2.4% of rows have the wrong currency (limit 2%) |
@@ -122,7 +128,7 @@ client is one entry in `config/clients.yaml`.
 ```bash
 pip install -e ".[dev]"
 python -m retro_intake.pipeline --generate   # build the synthetic inbox, then run everything
-python -m pytest -q                          # 50 tests
+python -m pytest -q                          # 56 tests
 streamlit run app/streamlit_app.py           # the app
 ```
 
@@ -141,11 +147,13 @@ GitHub Actions runs the Python tests and the Pester tests on every push.
 config/clients.yaml        client layouts, codes, units, treaty limits and rate basis
 config/rules.yaml          the rule catalogue (SQL)
 src/retro_intake/          generate, intake, mapping, validate, report, pipeline,
-                           ai (GenAI helpers), safesql (guardrails), onboarding, evaluate
-app/                       Streamlit app: streamlit_app.py, core.py, views/ (14 pages)
+                           ai (GenAI helpers), aieval (AI evaluation), safesql (guardrails),
+                           onboarding, spec (client data specification), evaluate
+app/                       Streamlit app: streamlit_app.py, core.py, views/ (18 pages)
+adf/                       Azure Data Factory pipeline template (not deployed)
 docs/runbook.md            sample team runbook (searched by Ask the runbook)
 scripts/                   Invoke-FileIntake.ps1 (PowerShell intake)
-sql/tsql/                  SQL Server version: tables, dq.usp_ValidateInforce, dq.usp_GateAndPromote
+sql/tsql/                  SQL Server version: tables, dq.usp_RegisterFile, dq.usp_ValidateInforce, dq.usp_GateAndPromote
 tests/                     pytest (pipeline, mapping, AI, guardrails, scenarios, every app page) and Pester
 output/                    created by a run: warehouse.duckdb, exception_reports/, client_followups/, powerbi/
 ```

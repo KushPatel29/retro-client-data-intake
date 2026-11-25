@@ -150,6 +150,14 @@ def guardrails(lines: list[str]):
                 "".join(f"<li>{x}</li>" for x in lines) + "</ul></div>", unsafe_allow_html=True)
 
 
+def log_ai(feature: str, mode: str, request: str, output: str, outcome: str = "Shown to user") -> None:
+    """Audit trail of every AI action in this session: what was asked, what came back, what the person did."""
+    from datetime import datetime
+    st.session_state.setdefault("ai_log", []).insert(0, {
+        "time": datetime.now().strftime("%H:%M:%S"), "feature": feature, "mode": mode,
+        "request": str(request)[:160], "output": str(output)[:200], "outcome": outcome})
+
+
 def filt(df: pd.DataFrame, **cols) -> pd.DataFrame:
     """Keep rows whose column value is in the chosen list; an empty list means no filter."""
     m = pd.Series(True, index=df.index)

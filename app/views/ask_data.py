@@ -42,6 +42,8 @@ if question:
         except Exception as e:
             df, err = None, f"Query failed: {e}"
         history.insert(0, {"q": question, "sql": sql, "expl": expl, "how": how, "df": df, "err": err})
+        core.log_ai("Ask the data", how, question, sql.replace("\n", " "),
+                    err or f"SQL shown; ran read-only, {len(df)} rows")
     finally:
         con.close()
 

@@ -38,9 +38,13 @@ def test_mapping_test_run_finds_the_sample_problems():
 
 
 @pytest.fixture(scope="module")
-def con():
-    res = pipeline.run(workdir=Path(tempfile.mkdtemp()), regenerate=True, quiet=True)
-    c = safesql.connect(res["db_path"])
+def run_res():
+    return pipeline.run(workdir=Path(tempfile.mkdtemp()), regenerate=True, quiet=True)
+
+
+@pytest.fixture(scope="module")
+def con(run_res):
+    c = safesql.connect(run_res["db_path"])
     yield c
     c.close()
 
@@ -69,3 +73,22 @@ def test_runbook_retrieval_finds_the_right_section(q, title):
     hits = rb.search(q)
     assert hits[0]["title"] == title
     assert "[1]" in rb.answer_offline(q, hits)
+
+
+def test_ai_evaluations(run_res):
+    from retro_intake import aieval
+    em = aieval.eval_mapping(run_res["inbox"])
+    assert (em.score == 1).all() and em["date format"].all() and em.units.all()
+    assert aieval.eval_ask(run_res["db_path"]).correct.all()
+    rb = aieval.eval_runbook()
+    assert rb["top 3"].all() and rb["top 1"].mean() >= 0.8
+
+
+def test_data_specification_lists_every_field():
+    from retro_intake import spec
+    from retro_intake.common import load_config
+    c = load_config()["clients"]["C04"]
+    doc = spec.build(c)
+    for src in c["columns"]["inforce"].values():
+        assert f"| {src} |" in doc
+    assert "YYYYMMDD" in doc and "width 12" in doc

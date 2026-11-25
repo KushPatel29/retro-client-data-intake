@@ -8,7 +8,7 @@ APP = Path(__file__).resolve().parents[1] / "app"
 sys.path.insert(0, str(APP))
 st_testing = pytest.importorskip("streamlit.testing.v1")
 
-PAGES = ["home", "role", "intake", "mapping", "rules", "recon", "exceptions", "followup", "gate",
+PAGES = ["home", "executive", "trends", "architecture", "automation", "role", "intake", "mapping", "rules", "recon", "exceptions", "followup", "gate",
          "scorecards", "ask_data", "ask_runbook", "testing", "governance"]
 
 

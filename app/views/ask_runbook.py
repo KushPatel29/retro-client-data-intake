@@ -38,7 +38,12 @@ with st.chat_message("assistant", avatar=":material/menu_book:"):
                     answer = rb.answer_llm(q, hits)
             except Exception as e:
                 st.warning(f"Claude was not reachable ({e}); showing the extractive answer.")
-        st.write(answer or rb.answer_offline(q, hits))
+        final = answer or rb.answer_offline(q, hits)
+        st.write(final)
+        if st.session_state.get("rb_logged") != q:
+            core.log_ai("Ask the runbook", "Claude" if answer else "offline retrieval", q, final,
+                        "Answer shown with " + ", ".join(h["title"] for h in hits))
+            st.session_state["rb_logged"] = q
         st.caption("Sources")
         for n, h in enumerate(hits, start=1):
             with st.expander(f"[{n}] {h['source']}: {h['title']}  (relevance {h['score']})"):

@@ -5,7 +5,7 @@ import streamlit as st
 import yaml
 
 import core
-from retro_intake import ai, mapping, onboarding
+from retro_intake import ai, mapping, onboarding, spec
 
 res = core.current()
 cfg = core.config()
@@ -13,7 +13,8 @@ core.header("2. Mapping and onboarding",
             "Four clients, four layouts. One configuration entry per client turns each layout into the same "
             "standard format, so adding a client is configuration, not code.")
 
-tab1, tab2 = st.tabs(["Existing client layouts", "Onboard a new client with the AI mapping assistant"])
+tab1, tab2, tab3 = st.tabs(["Existing client layouts", "Onboard a new client with the AI mapping assistant",
+                            "Data specifications and treaties"])
 
 with tab1:
     cid = st.radio("Client", list(cfg["clients"]), format_func=core.cname, horizontal=True)
@@ -101,6 +102,10 @@ with tab2:
         client_cfg = ai.mapping_to_config(sug, base)
         out = onboarding.test_mapping(client_cfg, headers, rows)
         st.session_state["maptest"] = (out, client_cfg)
+        changed = sum(1 for _, r in edited.iterrows() if r["client column"] != grid.set_index("standard field").loc[r["standard field"], "client column"])
+        core.log_ai("Mapping assistant", "offline profiler", f"{len(headers)} columns, {len(rows)} rows",
+                    f"{sum(1 for v in sug['fields'].values() if v['source'])} fields mapped",
+                    f"Reviewed by user ({changed} changed) and test-run in memory")
     if "maptest" in st.session_state:
         out, client_cfg = st.session_state["maptest"]
         bad = out["exceptions"]
@@ -122,3 +127,19 @@ with tab2:
     core.guardrails(["The assistant only suggests; a person reviews every field and code before go-live.",
                      "The test run happens in memory; nothing reaches the warehouse.",
                      "Unrecognised codes are never guessed; they stay unmapped and get flagged."])
+
+with tab3:
+    st.write("The data specification is the agreement with each client: file names, formats, controls, deadlines and "
+             "every field with its codes and units. It is generated from the same configuration the pipeline runs on, so "
+             "the document and the code cannot drift apart.")
+    st.markdown("**Treaty register**")
+    st.dataframe(pd.DataFrame([{"client": c["name"], "country": c["country"], "treaty": c["treaty_id"],
+                                "currency": c["currency"], "issue ages": f"{c['min_issue_age']}-{c['max_issue_age']}",
+                                "jumbo limit": f"{c['jumbo_limit']:,}", "default retro share": f"{c['retro_share_default']:.0%}",
+                                "file format": c["format"], "controls": c["control"]} for c in cfg["clients"].values()]),
+                 hide_index=True, width="stretch")
+    sid = st.selectbox("Specification for", list(cfg["clients"]), format_func=core.cname, key="specpick")
+    doc = spec.build(cfg["clients"][sid], cfg["due_day"])
+    st.download_button("Download the specification (.md)", doc, file_name=f"data_specification_{sid}.md")
+    with st.container(border=True):
+        st.markdown(doc)
