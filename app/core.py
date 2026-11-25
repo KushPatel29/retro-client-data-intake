@@ -49,13 +49,25 @@ h1{letter-spacing:-.02em}
 """
 
 
+def _engine_version() -> str:
+    """Fingerprint of the engine code and config, so cached runs are rebuilt whenever either changes."""
+    import hashlib
+    h = hashlib.sha256()
+    for f in sorted(list((ROOT / "src" / "retro_intake").glob("*.py")) + list((ROOT / "config").glob("*.yaml"))):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
+ENGINE_VERSION = _engine_version()
+
+
 def scenario() -> tuple[int, str]:
     return st.session_state.get("scenario", (SEED, "baseline"))
 
 
 @st.cache_resource(show_spinner=False)
-def run_scenario(seed: int, profile: str) -> dict:
-    work = Path(tempfile.gettempdir()) / "retro_runs" / f"{profile}_{seed}"
+def run_scenario(seed: int, profile: str, version: str = "") -> dict:
+    work = Path(tempfile.gettempdir()) / "retro_runs" / f"{profile}_{seed}_{version}"
     res = pipeline.run(workdir=work, regenerate=True, quiet=True, seed=seed, profile=profile)
     res["score"] = evaluate.score(res["db_path"], res["answer_key"])
     res["work"] = work
@@ -65,7 +77,7 @@ def run_scenario(seed: int, profile: str) -> dict:
 def current() -> dict:
     seed, profile = scenario()
     with st.spinner("Running the monthly control process on the synthetic files..."):
-        return run_scenario(seed, profile)
+        return run_scenario(seed, profile, ENGINE_VERSION)
 
 
 def db_path() -> Path:
