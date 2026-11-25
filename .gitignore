@@ -7,3 +7,4 @@ data/archive_ps/
 data/answer_key.csv
 output/
 .streamlit/secrets.toml
+keep_awake_failure.png

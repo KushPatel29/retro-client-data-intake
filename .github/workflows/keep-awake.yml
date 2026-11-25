@@ -1,0 +1,38 @@
+name: keep-app-awake
+
+# Streamlit Community Cloud sleeps apps after ~12 hours without a visit.
+# This visits the live app every 4 hours in a real browser so it never sleeps.
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install headless browser
+        run: |
+          pip install playwright==1.*
+          python -m playwright install --with-deps chromium
+      - name: Visit the app
+        run: python scripts/keep_awake.py https://retro-intake-kp.streamlit.app
+      - name: Save screenshot if it failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keep-awake-failure
+          path: keep_awake_failure.png
+          if-no-files-found: ignore
