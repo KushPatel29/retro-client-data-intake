@@ -12,8 +12,9 @@ import duckdb
 import pandas as pd
 
 MAX_ROWS = 500
-BLOCKED = re.compile(r"\b(read_csv|read_parquet|read_json|copy|attach|install|load|pragma|export|import|"
-                     r"httpfs|glob|getenv|read_text|read_blob)\b", re.IGNORECASE)
+BLOCKED = re.compile(r"\b(read_\w+|\w+_scan|sniff_csv|query|query_table|copy|attach|detach|install|load|"
+                     r"pragma|export|import|httpfs|glob|getenv|current_setting|duckdb_\w+|set|reset|"
+                     r"checkpoint|vacuum|call)\b|'(?:/|~|\.\.|[a-z]:\\|[a-z0-9+]+://)[^']*'", re.IGNORECASE)
 
 
 class Refused(ValueError):

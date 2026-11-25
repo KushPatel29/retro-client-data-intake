@@ -56,7 +56,7 @@ e3.dataframe(er, hide_index=True, width="stretch")
 e3.caption("Misses are kept visible: the right section still appears in the top three, and every answer cites its sources.")
 
 st.subheader("Automated test suite")
-st.write("56 pytest tests: detection on several seeds and profiles, no false alarms, every rule exercised, expected holds, no critical "
+st.write("57 pytest tests: detection on several seeds and profiles, no false alarms, every rule exercised, expected holds, no critical "
          "record in production, rows loaded + held back = rows received, roll-forward balances, layout mapping, AI helpers, SQL "
          "guardrails, and every app page. The button runs the 38 engine tests; the 18 page tests run in CI.")
 if st.button("Run the engine tests now"):

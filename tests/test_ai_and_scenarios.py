@@ -92,3 +92,17 @@ def test_data_specification_lists_every_field():
     for src in c["columns"]["inforce"].values():
         assert f"| {src} |" in doc
     assert "YYYYMMDD" in doc and "width 12" in doc
+
+
+def test_guardrail_blocks_file_and_dynamic_sql():
+    from retro_intake import safesql
+    bad = ["SELECT * FROM read_csv_auto('/etc/passwd')", "SELECT * FROM query('select 1')",
+           "SELECT * FROM query_table('exceptions')", "SELECT * FROM duckdb_settings()",
+           "SELECT current_setting('home_directory')", "SELECT * FROM parquet_scan('x')",
+           "SELECT * FROM '/etc/passwd'", "SELECT * FROM 's3://bucket/x.csv'", "SELECT * FROM sniff_csv('a')"]
+    for sql in bad:
+        with pytest.raises(safesql.Refused):
+            safesql.check(sql)
+    for sql in ["SELECT count(*) FROM exceptions", "SELECT * FROM exceptions WHERE status = 'N/A'",
+                "SELECT rule_id, count(*) AS n FROM exceptions GROUP BY 1 ORDER BY n DESC OFFSET 0"]:
+        safesql.check(sql)

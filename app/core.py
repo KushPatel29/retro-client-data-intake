@@ -67,7 +67,8 @@ def scenario() -> tuple[int, str]:
 
 @st.cache_resource(show_spinner=False)
 def run_scenario(seed: int, profile: str, version: str = "") -> dict:
-    work = Path(tempfile.gettempdir()) / "retro_runs" / f"{profile}_{seed}_{version}"
+    import os
+    work = Path(tempfile.gettempdir()) / "retro_runs" / f"{profile}_{seed}_{version}_{os.getpid()}"
     res = pipeline.run(workdir=work, regenerate=True, quiet=True, seed=seed, profile=profile)
     res["score"] = evaluate.score(res["db_path"], res["answer_key"])
     res["work"] = work

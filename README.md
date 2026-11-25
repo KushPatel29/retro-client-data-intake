@@ -128,7 +128,7 @@ client is one entry in `config/clients.yaml`.
 ```bash
 pip install -e ".[dev]"
 python -m retro_intake.pipeline --generate   # build the synthetic inbox, then run everything
-python -m pytest -q                          # 56 tests
+python -m pytest -q                          # 57 tests
 streamlit run app/streamlit_app.py           # the app
 ```
 
