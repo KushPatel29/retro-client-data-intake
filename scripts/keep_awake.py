@@ -26,6 +26,18 @@ def find_ready(page):
     return False
 
 
+def app_error(page):
+    """Return the first error message the app is showing, if any."""
+    for frame in page.frames:
+        try:
+            el = frame.query_selector('[data-testid="stException"], [data-testid="stAlertContentError"]')
+            if el:
+                return el.inner_text()[:500]
+        except Exception:
+            pass
+    return None
+
+
 def click_wake(page):
     for frame in page.frames:
         try:
@@ -51,6 +63,13 @@ def visit(browser, url, timeout_s=300):
     start = time.time()
     while time.time() - start < timeout_s:
         if find_ready(page):
+            page.wait_for_timeout(8_000)  # let the page finish rendering before the proof screenshot
+            err = app_error(page)
+            page.screenshot(path="keep_awake_last.png", full_page=True)
+            if err:
+                print(f"FAIL  {url}  app shows an error: {err}")
+                page.close()
+                return False
             print(f"OK    {url}  ({'woken up' if woke else 'already awake'}, {time.time() - start:.0f}s)")
             page.close()
             return True

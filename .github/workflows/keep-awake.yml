@@ -29,10 +29,10 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Visit the app
         run: python scripts/keep_awake.py https://retro-intake-kp.streamlit.app
-      - name: Save screenshot if it failed
-        if: failure()
+      - name: Save screenshot of the live app
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: keep-awake-failure
-          path: keep_awake_failure.png
+          name: keep-awake-screenshot
+          path: keep_awake_*.png
           if-no-files-found: ignore
